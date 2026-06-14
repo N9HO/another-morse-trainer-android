@@ -65,4 +65,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    // WebSocket transport for the Vail repeater client.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

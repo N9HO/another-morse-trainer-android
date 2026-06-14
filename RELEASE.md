@@ -26,7 +26,7 @@ Neither is committed to git (`.gitignore` excludes them). The upload cert SHA-25
 ## Build a release AAB (repeat for every update)
 
 ```bash
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export JAVA_HOME="/opt/homebrew/opt/openjdk@17"   # was Android Studio's JBR
 cd ~/MorseTrainerAndroid
 ./gradlew bundleRelease
 # → app/build/outputs/bundle/release/app-release.aab
@@ -34,6 +34,42 @@ cd ~/MorseTrainerAndroid
 
 For each update **bump `versionCode`** (2, 3, …) — Play rejects a re-used code —
 and usually `versionName` ("1.0.1", "1.1", …).
+
+## Automated releases (GitHub Actions) — the iOS-parity bit
+
+Two workflows are committed under `.github/workflows/`:
+
+- **`android-ci.yml`** — builds the debug APK on every push/PR and attaches it as
+  an artifact, so changes made from the Claude phone app can be verified without a
+  laptop (the Android counterpart of the iOS repo's `ios.yml`).
+- **`android-release.yml`** — on a pushed version tag (`v*`), builds the **signed
+  AAB and uploads it to the Play _internal testing_ track**. This automates the
+  step iOS still does by hand (Xcode → TestFlight). Cut a release with:
+
+  ```bash
+  # bump versionCode/versionName in app/build.gradle.kts first, commit, then:
+  git tag v1.0.1 && git push origin v1.0.1
+  ```
+
+  Until the secrets below are set it degrades gracefully — it just builds the AAB
+  and uploads it as a workflow artifact instead of failing.
+
+### One-time setup to enable the automated upload
+
+1. **The app must already exist in Play Console** with **one manual upload** on the
+   `internal` track (the API won't create the app or accept the very first upload).
+2. **Create a Google Play service account** (Play Console → Setup → API access →
+   create/link a Google Cloud service account → grant it **Release manager**), and
+   download its **JSON key**.
+3. **Add GitHub repository secrets** (Settings → Secrets and variables → Actions):
+   - `ANDROID_KEYSTORE_BASE64` = `base64 -i ~/.android-keystores/amt-upload.jks`
+   - `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`amt-upload`), `ANDROID_KEY_PASSWORD`
+     (the values from `keystore.properties`)
+   - `PLAY_SERVICE_ACCOUNT_JSON` = the full contents of the service-account JSON
+
+   The release workflow recreates `keystore.properties` + the keystore from these at
+   build time (nothing secret is committed). To upload to a different track, change
+   `track: internal` in `android-release.yml`.
 
 ## Your side — Google Play Console (one-time)
 

@@ -52,7 +52,7 @@ private val OK_GREEN = Color(0xFF2E7D32)
 private val ERR_RED = Color(0xFFC62828)
 
 /** Mutable per-session tally, accumulated as the learner answers. */
-private class Tally {
+internal class Tally {
     var attempts = 0
     var correct = 0
     var bestMs: Int? = null
@@ -77,6 +77,12 @@ fun QuizScreen(
     val source = remember { makeSource() }
 
     var drill by remember { mutableStateOf(source.nextDrill()) }
+    // Monotonic round counter drives the play/reset effect. We must NOT key that
+    // effect on `drill` itself: `Drill` is a data class, so when nextDrill()
+    // happens to return a value-equal round (common with small option sets like a
+    // 2-character drill), assigning it is a no-op to Compose and the effect never
+    // relaunches — leaving the screen frozen on the answered state. (issue #43)
+    var round by remember { mutableStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<String?>(null) }
     var lastTtr by remember { mutableStateOf(0.0) }
@@ -95,7 +101,7 @@ fun QuizScreen(
         if (granted) listenTick++ else voiceNote = "Microphone permission is needed for voice answers."
     }
 
-    LaunchedEffect(drill) {
+    LaunchedEffect(round) {
         revealed = false
         chosen = null
         toneFinishedAt = 0L
@@ -109,6 +115,7 @@ fun QuizScreen(
         if (revealed) {
             delay(1100)
             drill = source.nextDrill()
+            round++
         }
     }
 
@@ -192,20 +199,33 @@ fun QuizScreen(
             Spacer(Modifier.height(36.dp))
 
             if (revealed) {
-                Text(
-                    text = drill.revealPrimary,
-                    fontSize = 44.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    textAlign = TextAlign.Center
-                )
-                if (drill.revealSecondary.isNotEmpty()) {
-                    Text(text = drill.revealSecondary, fontSize = 20.sp, color = Brand.textSecondary)
-                }
-                Spacer(Modifier.height(4.dp))
                 val ok = chosen == drill.correct
+                // Show the answer per the user's reveal preference; the ✓/✗ line
+                // always shows so they still know if they were right.
+                val showAnswer = when (Settings.revealMode) {
+                    RevealMode.ALWAYS -> true
+                    RevealMode.ON_WRONG -> !ok
+                    RevealMode.NEVER -> false
+                }
+                if (showAnswer) {
+                    Text(
+                        text = drill.revealPrimary,
+                        fontSize = 44.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Center
+                    )
+                    if (drill.revealSecondary.isNotEmpty()) {
+                        Text(text = drill.revealSecondary, fontSize = 20.sp, color = Brand.textSecondary)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
                 Text(
-                    text = if (ok) "✓ recalled in %.1f s".format(lastTtr) else "✗ it was “${drill.correct}”",
+                    text = when {
+                        ok -> "✓ recalled in %.1f s".format(lastTtr)
+                        showAnswer -> "✗ it was “${drill.correct}”"
+                        else -> "✗ not quite"
+                    },
                     color = if (ok) OK_GREEN else ERR_RED,
                     fontWeight = FontWeight.Medium
                 )

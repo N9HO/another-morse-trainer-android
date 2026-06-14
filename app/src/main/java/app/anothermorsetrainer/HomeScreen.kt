@@ -19,8 +19,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Abc
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.QuestionAnswer
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TextFields
@@ -58,6 +66,12 @@ fun HomeScreen(
     onPickPileup: () -> Unit,
     onPickExam: () -> Unit,
     onPickListen: () -> Unit,
+    onPickHeadCopy: () -> Unit,
+    onPickTypeIt: () -> Unit,
+    onPickQrq: () -> Unit,
+    onPickStory: () -> Unit,
+    onPickSending: () -> Unit,
+    onPickRepeater: () -> Unit,
     onPickSettings: () -> Unit,
     onPickStats: () -> Unit
 ) {
@@ -65,13 +79,17 @@ fun HomeScreen(
         "Characters" to Icons.Filled.Abc,
         "Common Words" to Icons.Filled.TextFields,
         "Abbreviations" to Icons.AutoMirrored.Filled.Chat,
-        "Q-Codes" to Icons.Filled.QuestionAnswer
+        "Q-Codes" to Icons.Filled.QuestionAnswer,
+        "Prosigns" to Icons.Filled.Podcasts,
+        "Confusion Drill" to Icons.Filled.SwapHoriz
     )
     val modeTaglines = mapOf(
         "Characters" to "Core Koch drill",
         "Common Words" to "Whole ham words",
         "Abbreviations" to "CW abbreviations",
-        "Q-Codes" to "Q-signal shorthand"
+        "Q-Codes" to "Q-signal shorthand",
+        "Prosigns" to "Run-together signals",
+        "Confusion Drill" to "Drill your mix-ups"
     )
     val items = QUIZ_MODES.map { mode ->
         HomeItem(
@@ -79,7 +97,13 @@ fun HomeScreen(
             modeTaglines[mode.title] ?: mode.subtitle,
             modeIcons[mode.title] ?: Icons.Filled.Abc
         ) { onPickQuiz(mode) }
-    } + HomeItem("Pileup Runner", "Work a CW pileup", Icons.Filled.RecordVoiceOver, onPickPileup) +
+    } + HomeItem("Head Copy", "Copy in your head", Icons.Filled.Psychology, onPickHeadCopy) +
+        HomeItem("Type It", "Free-recall typing", Icons.Filled.Keyboard, onPickTypeIt) +
+        HomeItem("QRQ Speed", "High-speed copy", Icons.Filled.Bolt, onPickQrq) +
+        HomeItem("Sending Practice", "Key it back", Icons.Filled.Vibration, onPickSending) +
+        HomeItem("Repeater", "Live over the network", Icons.Filled.Wifi, onPickRepeater) +
+        HomeItem("Short Stories", "Continuous copy", Icons.AutoMirrored.Filled.MenuBook, onPickStory) +
+        HomeItem("Pileup Runner", "Work a CW pileup", Icons.Filled.RecordVoiceOver, onPickPileup) +
         HomeItem("Code Exam", "ARRL/FCC code exam", Icons.Filled.WorkspacePremium, onPickExam) +
         HomeItem("Listen & Learn", "Hands-free, eyes-free", Icons.Filled.Headphones, onPickListen)
 
