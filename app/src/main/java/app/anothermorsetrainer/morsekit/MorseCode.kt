@@ -73,4 +73,20 @@ object MorseCode {
         val pattern = pattern(for_) ?: return emptyList()
         return pattern.map { if (it == '.') Element.DIT else Element.DAH }
     }
+
+    /**
+     * Reverse lookup: an element-string pattern ("-..-") → its character. Built
+     * from [allPatterns], so a base-table entry wins on any clash (the base
+     * entries come last in `optionalPunctuation + table`, overwriting in the
+     * association). Used by the decoder to turn keyed timing back into text.
+     */
+    private val charForPattern: Map<String, Char> =
+        allPatterns.entries.associate { (ch, pat) -> pat to ch }
+
+    /** Decode a sequence of dit/dah elements back to a character, or null. */
+    fun character(for_: List<Element>): Char? {
+        if (for_.isEmpty()) return null
+        val pattern = for_.joinToString("") { if (it == Element.DIT) "." else "-" }
+        return charForPattern[pattern]
+    }
 }
