@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import app.anothermorsetrainer.morsekit.ConfusionQuiz
 import app.anothermorsetrainer.morsekit.MorseData
 import app.anothermorsetrainer.morsekit.PhraseQuiz
 import app.anothermorsetrainer.morsekit.ProgressiveCharacters
@@ -36,38 +37,67 @@ data class QuizMode(val title: String, val subtitle: String, val make: () -> Qui
 /** The menu of modes the home screen offers — every one drives the same QuizScreen. */
 val QUIZ_MODES: List<QuizMode> = listOf(
     QuizMode("Characters", "Koch-method ladder, A–Z 0–9") {
-        ProgressiveCharacters(TrainerEngine(TrainerEngine.Config(wpm = Settings.characterWpm)))
+        val engine = TrainerEngine(Settings.engineConfig())
+        Settings.applyProficiency(engine)
+        ProgressiveCharacters(engine)
     },
     QuizMode("Common Words", "Hear the word, pick the word") {
-        PhraseQuiz("Words", MorseData.wordItems)
+        PhraseQuiz("Words", MorseData.topWordItems(Settings.wordCount), Settings.phraseConfig())
     },
     QuizMode("Abbreviations", "CW shorthand → meaning") {
-        PhraseQuiz("Abbreviations", MorseData.abbreviationItems)
+        PhraseQuiz("Abbreviations", MorseData.abbreviationItems, Settings.phraseConfig())
     },
     QuizMode("Q-Codes", "QRZ, QSY, QTH …") {
-        PhraseQuiz("Q-Codes", MorseData.qCodeItems)
+        PhraseQuiz("Q-Codes", MorseData.qCodeItems, Settings.phraseConfig())
+    },
+    QuizMode("Prosigns", "Run-together signals") {
+        PhraseQuiz("Prosigns", MorseData.prosignItems, Settings.phraseConfig())
+    },
+    // Targeted review of the character pairs you mix up. A standalone engine
+    // starts with no recorded confusions, so ConfusionQuiz falls back to your
+    // slowest active characters paired with their nearest sound-alikes.
+    QuizMode("Confusion Drill", "Drill your mix-ups") {
+        val engine = TrainerEngine(Settings.engineConfig())
+        Settings.applyProficiency(engine)
+        ConfusionQuiz(engine)
     }
 )
 
 private sealed interface Route {
+    data object Onboarding : Route
     data object Home : Route
     data class Quiz(val mode: QuizMode) : Route
     data object Pileup : Route
     data object Exam : Route
     data object Listen : Route
+    data object HeadCopy : Route
+    data object TypeIt : Route
+    data object Qrq : Route
+    data object Story : Route
+    data object Sending : Route
+    data object Repeater : Route
     data object Settings : Route
     data object Stats : Route
 }
 
 @Composable
 private fun AppRoot() {
-    var route by remember { mutableStateOf<Route>(Route.Home) }
+    var route by remember {
+        mutableStateOf<Route>(if (Settings.onboardingDone) Route.Home else Route.Onboarding)
+    }
     when (val r = route) {
+        Route.Onboarding -> OnboardingScreen(onDone = { route = Route.Home })
         Route.Home -> HomeScreen(
             onPickQuiz = { route = Route.Quiz(it) },
             onPickPileup = { route = Route.Pileup },
             onPickExam = { route = Route.Exam },
             onPickListen = { route = Route.Listen },
+            onPickHeadCopy = { route = Route.HeadCopy },
+            onPickTypeIt = { route = Route.TypeIt },
+            onPickQrq = { route = Route.Qrq },
+            onPickStory = { route = Route.Story },
+            onPickSending = { route = Route.Sending },
+            onPickRepeater = { route = Route.Repeater },
             onPickSettings = { route = Route.Settings },
             onPickStats = { route = Route.Stats }
         )
@@ -79,6 +109,16 @@ private fun AppRoot() {
         Route.Pileup -> PileupScreen(onBack = { route = Route.Home })
         Route.Exam -> CodeExamScreen(onBack = { route = Route.Home })
         Route.Listen -> ListenScreen(onBack = { route = Route.Home })
+        Route.HeadCopy -> HeadCopyScreen(onBack = { route = Route.Home })
+        Route.TypeIt -> TypedQuizScreen(
+            title = "Type It",
+            onBack = { route = Route.Home },
+            makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems) }
+        )
+        Route.Qrq -> QrqScreen(onBack = { route = Route.Home })
+        Route.Story -> StoryScreen(onBack = { route = Route.Home })
+        Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home })
+        Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(onBack = { route = Route.Home })
         Route.Stats -> StatsScreen(onBack = { route = Route.Home })
     }
