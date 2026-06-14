@@ -5,7 +5,25 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.MorseTiming
+import app.anothermorsetrainer.morsekit.PhraseQuiz
+import app.anothermorsetrainer.morsekit.TrainerEngine
+
+/** When to reveal the correct answer after a response (mirrors iOS RevealMode). */
+enum class RevealMode(val label: String, val shortLabel: String) {
+    NEVER("Never", "Never"),
+    ON_WRONG("Only when wrong", "Wrong"),
+    ALWAYS("Always", "Always")
+}
+
+/** How much Morse the learner already knows — seeds the Koch starting set. */
+enum class Proficiency(val label: String) {
+    NONE("I know nothing"),
+    SOME_LETTERS("I know some of the letters"),
+    ALL_LETTERS("I know all the letters"),
+    ALL_LETTERS_AND_NUMBERS("I know all the letters and numbers")
+}
 
 /**
  * App-wide, persisted preferences. A process-wide singleton (rather than a
@@ -33,6 +51,28 @@ object Settings {
     var voiceAnswersEnabled by mutableStateOf(false)
         private set
 
+    // ---- Practice (drill difficulty / presentation) ----
+
+    /** Most answer choices to ever show (grows with what you've met, up to this). */
+    var answerChoices by mutableStateOf(4)
+        private set
+    /** "Fast enough" recognition-time bar, in seconds — drives mastery/weighting. */
+    var recognitionTargetSec by mutableStateOf(1.0)
+        private set
+    /** How big a pool Common Words draws from (Top-N ranked ham words). */
+    var wordCount by mutableStateOf(100)
+        private set
+    /** When to reveal the correct answer after a response. */
+    var revealMode by mutableStateOf(RevealMode.ALWAYS)
+        private set
+
+    /** How much the learner already knows — seeds the Characters Koch ladder. */
+    var proficiency by mutableStateOf(Proficiency.NONE)
+        private set
+    /** False until the first-run onboarding (comfort-level pick) is completed. */
+    var onboardingDone by mutableStateOf(false)
+        private set
+
     // Daily practice reminder (a notification to keep the streak alive).
     var remindersEnabled by mutableStateOf(false)
         private set
@@ -48,6 +88,14 @@ object Settings {
         sidetoneHz = prefs.getFloat("sidetone", 600f).toDouble()
         hapticsEnabled = prefs.getBoolean("haptics", true)
         voiceAnswersEnabled = prefs.getBoolean("voiceAnswers", false)
+        answerChoices = prefs.getInt("answerChoices", 4).coerceIn(4, 6)
+        recognitionTargetSec = prefs.getFloat("recogTarget", 1.0f).toDouble()
+        wordCount = prefs.getInt("wordCount", 100)
+        revealMode = runCatching { RevealMode.valueOf(prefs.getString("revealMode", null) ?: "ALWAYS") }
+            .getOrDefault(RevealMode.ALWAYS)
+        proficiency = runCatching { Proficiency.valueOf(prefs.getString("proficiency", null) ?: "NONE") }
+            .getOrDefault(Proficiency.NONE)
+        onboardingDone = prefs.getBoolean("onboardingDone", false)
         remindersEnabled = prefs.getBoolean("reminders", false)
         reminderHour = prefs.getInt("reminderHour", 19)
         reminderMinute = prefs.getInt("reminderMinute", 0)
@@ -57,6 +105,14 @@ object Settings {
     fun timing(): MorseTiming =
         if (effectiveWpm < characterWpm) MorseTiming.farnsworth(characterWpm, effectiveWpm)
         else MorseTiming(characterWpm)
+
+    /** Engine config carrying the user's speed, recognition target, and choice count. */
+    fun engineConfig(wpm: Double = characterWpm): TrainerEngine.Config =
+        TrainerEngine.Config(wpm = wpm, ttrThreshold = recognitionTargetSec, optionCount = answerChoices)
+
+    /** Phrase-quiz config carrying the user's recognition target and choice count. */
+    fun phraseConfig(): PhraseQuiz.Config =
+        PhraseQuiz.Config(ttrThreshold = recognitionTargetSec, optionCount = answerChoices)
 
     fun updateCharacterWpm(value: Double) {
         characterWpm = value.coerceIn(5.0, 40.0)
@@ -84,6 +140,57 @@ object Settings {
         persist()
     }
 
+    fun updateAnswerChoices(value: Int) {
+        answerChoices = value.coerceIn(4, 6)
+        persist()
+    }
+
+    fun updateRecognitionTargetSec(value: Double) {
+        recognitionTargetSec = value.coerceIn(0.5, 2.5)
+        persist()
+    }
+
+    fun updateWordCount(value: Int) {
+        wordCount = value
+        persist()
+    }
+
+    fun updateRevealMode(value: RevealMode) {
+        revealMode = value
+        persist()
+    }
+
+    fun updateProficiency(value: Proficiency) {
+        proficiency = value
+        persist()
+    }
+
+    /** Mark first-run onboarding complete (also records the chosen level). */
+    fun completeOnboarding(level: Proficiency) {
+        proficiency = level
+        onboardingDone = true
+        persist()
+    }
+
+    /** The Koch starting characters implied by the chosen [proficiency]. */
+    fun seedCharacters(): List<Char> = when (proficiency) {
+        Proficiency.NONE -> MorseCode.kochOrder.take(2)
+        Proficiency.SOME_LETTERS -> MorseCode.kochOrder.filter { it.isLetter() }.take(13)
+        Proficiency.ALL_LETTERS -> MorseCode.kochOrder.filter { it.isLetter() }
+        Proficiency.ALL_LETTERS_AND_NUMBERS -> MorseCode.kochOrder
+    }
+
+    /**
+     * Seed an engine's active/met characters from the chosen proficiency. A
+     * declared level front-loads its characters as "already met" (full choice
+     * grid right away); a true beginner starts from a single option and builds up.
+     */
+    fun applyProficiency(engine: TrainerEngine) {
+        val chars = seedCharacters()
+        engine.setActiveCharacters(chars)
+        engine.setExposedCharacters(if (proficiency == Proficiency.NONE) emptyList() else chars)
+    }
+
     fun updateRemindersEnabled(value: Boolean) {
         remindersEnabled = value
         persist()
@@ -102,6 +209,12 @@ object Settings {
             .putFloat("sidetone", sidetoneHz.toFloat())
             .putBoolean("haptics", hapticsEnabled)
             .putBoolean("voiceAnswers", voiceAnswersEnabled)
+            .putInt("answerChoices", answerChoices)
+            .putFloat("recogTarget", recognitionTargetSec.toFloat())
+            .putInt("wordCount", wordCount)
+            .putString("revealMode", revealMode.name)
+            .putString("proficiency", proficiency.name)
+            .putBoolean("onboardingDone", onboardingDone)
             .putBoolean("reminders", remindersEnabled)
             .putInt("reminderHour", reminderHour)
             .putInt("reminderMinute", reminderMinute)

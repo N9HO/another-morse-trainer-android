@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -160,6 +161,56 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
                 SectionFooter("The frequency of the practice tone you hear.")
 
+                SectionHeader("Practice")
+                SettingsGroup {
+                    SegmentedSetting(
+                        label = "Answer choices",
+                        options = listOf("4" to 4, "5" to 5, "6" to 6),
+                        selected = Settings.answerChoices,
+                        onSelect = { Settings.updateAnswerChoices(it) }
+                    )
+                    GroupDivider()
+                    SliderSetting(
+                        label = "Recognition target",
+                        value = "%.1f s".format(Settings.recognitionTargetSec),
+                        position = Settings.recognitionTargetSec.toFloat(),
+                        range = 0.5f..2.5f, steps = 7,
+                        onChange = { Settings.updateRecognitionTargetSec(it.toDouble()) }
+                    )
+                    GroupDivider()
+                    SegmentedSetting(
+                        label = "Word pool",
+                        options = listOf("100" to 100, "300" to 300, "500" to 500),
+                        selected = Settings.wordCount,
+                        onSelect = { Settings.updateWordCount(it) }
+                    )
+                    GroupDivider()
+                    SegmentedSetting(
+                        label = "Reveal answer",
+                        options = RevealMode.entries.map { it.shortLabel to it },
+                        selected = Settings.revealMode,
+                        onSelect = { Settings.updateRevealMode(it) }
+                    )
+                }
+                SectionFooter(
+                    "How many options each drill shows, how fast you must answer to " +
+                        "count as “mastered”, how big the Common Words pool is, and when to " +
+                        "show the correct answer after you respond."
+                )
+
+                SectionHeader("Starting level")
+                SettingsGroup {
+                    Proficiency.entries.forEachIndexed { i, level ->
+                        if (i > 0) GroupDivider()
+                        RadioRow(
+                            label = level.label,
+                            selected = Settings.proficiency == level,
+                            onClick = { Settings.updateProficiency(level) }
+                        )
+                    }
+                }
+                SectionFooter("How much Morse you already know — sets where the Characters drill begins.")
+
                 SectionHeader("Feedback")
                 SettingsGroup {
                     Row(
@@ -276,6 +327,59 @@ private fun GroupDivider() {
             .height(1.dp)
             .background(Brand.hairline)
     )
+}
+
+@Composable
+private fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            label,
+            color = if (selected) Brand.teal else Brand.textPrimary,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+        )
+        if (selected) Text("✓", color = Brand.teal, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun <T> SegmentedSetting(
+    label: String,
+    options: List<Pair<String, T>>,
+    selected: T,
+    onSelect: (T) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (optLabel, value) ->
+                val isSel = value == selected
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (isSel) Brand.teal else Brand.navyRaised,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                        )
+                        .clickable { onSelect(value) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        optLabel,
+                        color = if (isSel) Brand.navy else Brand.textSecondary,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
