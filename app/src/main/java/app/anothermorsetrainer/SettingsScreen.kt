@@ -1,0 +1,310 @@
+package app.anothermorsetrainer
+
+import android.Manifest
+import android.app.TimePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.MorseItem
+import kotlin.math.roundToInt
+
+/**
+ * Tune playback to taste: speed, Farnsworth spacing, sidetone pitch, and haptic
+ * feedback. Laid out as iOS-style grouped sections (header → rounded card of
+ * rows → footer caption). Writes straight through [Settings] (persisted); the
+ * Preview button keys a sample so changes are audible immediately.
+ */
+@Composable
+fun SettingsScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val player = remember { MorsePlayer() }
+    DisposableEffect(Unit) { onDispose { player.release() } }
+    BackHandler { onBack() }
+
+    val farnsworthOn = Settings.effectiveWpm < Settings.characterWpm
+
+    // Daily reminder: enabling may need the POST_NOTIFICATIONS runtime permission (API 33+).
+    val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            Settings.updateRemindersEnabled(true)
+            Reminders.schedule(context)
+        }
+    }
+    fun enableReminders() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            Settings.updateRemindersEnabled(true)
+            Reminders.schedule(context)
+        }
+    }
+    fun disableReminders() {
+        Settings.updateRemindersEnabled(false)
+        Reminders.cancel(context)
+    }
+    fun pickTime() {
+        TimePickerDialog(
+            context,
+            { _, h, m ->
+                Settings.updateReminderTime(h, m)
+                if (Settings.remindersEnabled) Reminders.schedule(context)
+            },
+            Settings.reminderHour, Settings.reminderMinute, false
+        ).show()
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text("‹ Back", color = Brand.teal) }
+
+        CenteredContent {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+            ) {
+                Text(
+                    "Settings",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Brand.textPrimary,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                )
+
+                SectionHeader("Speed")
+                SettingsGroup {
+                    SliderSetting(
+                        label = "Character speed",
+                        value = "${Settings.characterWpm.roundToInt()} WPM",
+                        position = Settings.characterWpm.toFloat(),
+                        range = 5f..40f, steps = 34,
+                        onChange = { Settings.updateCharacterWpm(it.toDouble()) }
+                    )
+                    GroupDivider()
+                    SliderSetting(
+                        label = "Farnsworth speed",
+                        value = if (farnsworthOn) "${Settings.effectiveWpm.roundToInt()} WPM" else "Off",
+                        position = Settings.effectiveWpm.toFloat(),
+                        range = 5f..40f, steps = 34,
+                        onChange = { Settings.updateEffectiveWpm(it.toDouble()) }
+                    )
+                }
+                SectionFooter(
+                    "Character speed is how fast the dits and dahs are sent. Farnsworth " +
+                        "stretches the gaps between characters (set it below the character " +
+                        "speed) to give you more time to recognise each one."
+                )
+
+                SectionHeader("Sound")
+                SettingsGroup {
+                    SliderSetting(
+                        label = "Sidetone pitch",
+                        value = "${Settings.sidetoneHz.roundToInt()} Hz",
+                        position = Settings.sidetoneHz.toFloat(),
+                        range = 300f..1000f, steps = 0,
+                        onChange = { Settings.updateSidetoneHz(it.toDouble()) }
+                    )
+                    GroupDivider()
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Preview tone", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        OutlinedButton(onClick = {
+                            player.play(MorseItem.Playable.Text("PARIS"), Settings.sidetoneHz, Settings.timing()) {}
+                        }) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Text(" Play")
+                        }
+                    }
+                }
+                SectionFooter("The frequency of the practice tone you hear.")
+
+                SectionHeader("Feedback")
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Haptic feedback", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.hapticsEnabled,
+                            onCheckedChange = { Settings.updateHapticsEnabled(it) },
+                            colors = switchColors()
+                        )
+                    }
+                    GroupDivider()
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Voice answers", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.voiceAnswersEnabled,
+                            onCheckedChange = { Settings.updateVoiceAnswersEnabled(it) },
+                            colors = switchColors()
+                        )
+                    }
+                }
+                SectionFooter("Buzz on right and wrong answers. Voice answers let you speak instead of tap (uses the microphone).")
+
+                SectionHeader("Reminders")
+                SettingsGroup {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Daily reminder", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = Settings.remindersEnabled,
+                            onCheckedChange = { if (it) enableReminders() else disableReminders() },
+                            colors = switchColors()
+                        )
+                    }
+                    if (Settings.remindersEnabled) {
+                        GroupDivider()
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Time", color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+                            TextButton(onClick = { pickTime() }) {
+                                Text(formatTime(Settings.reminderHour, Settings.reminderMinute), color = Brand.teal, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+                SectionFooter("A daily nudge to keep your streak alive.")
+
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun switchColors() = SwitchDefaults.colors(
+    checkedThumbColor = Brand.navy,
+    checkedTrackColor = Brand.teal,
+    uncheckedThumbColor = Brand.textSecondary,
+    uncheckedTrackColor = Brand.navyRaised
+)
+
+private fun formatTime(hour: Int, minute: Int): String {
+    val ampm = if (hour < 12) "AM" else "PM"
+    val h12 = if (hour % 12 == 0) 12 else hour % 12
+    return "%d:%02d %s".format(h12, minute, ampm)
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        title.uppercase(),
+        color = Brand.textSecondary,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.sp,
+        modifier = Modifier.padding(start = 8.dp, top = 20.dp, bottom = 6.dp)
+    )
+}
+
+@Composable
+private fun SectionFooter(text: String) {
+    Text(
+        text,
+        color = Brand.textSecondary,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp)
+    )
+}
+
+@Composable
+private fun SettingsGroup(content: @Composable () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().brandCard()) { content() }
+}
+
+@Composable
+private fun GroupDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .height(1.dp)
+            .background(Brand.hairline)
+    )
+}
+
+@Composable
+private fun SliderSetting(
+    label: String,
+    value: String,
+    position: Float,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    onChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+            Text(value, color = Brand.teal, fontWeight = FontWeight.SemiBold)
+        }
+        Slider(
+            value = position,
+            onValueChange = onChange,
+            valueRange = range,
+            steps = steps,
+            colors = SliderDefaults.colors(
+                thumbColor = Brand.teal,
+                activeTrackColor = Brand.teal,
+                inactiveTrackColor = Brand.navyRaised,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent
+            ),
+            modifier = Modifier.height(28.dp)
+        )
+    }
+}
