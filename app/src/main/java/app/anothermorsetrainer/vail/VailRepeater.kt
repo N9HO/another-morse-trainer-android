@@ -44,9 +44,16 @@ class VailRepeater(context: Context) {
     var isKeying by mutableStateOf(false); private set
     var midiDevice by mutableStateOf<String?>(null); private set
 
+    // Activity timeline + chat.
+    var signalEvents by mutableStateOf<List<SignalEvent>>(emptyList()); private set
+    var liveOwnKeyStarts by mutableStateOf<List<Long>>(emptyList()); private set
+    var chatMessages by mutableStateOf<List<ChatLine>>(emptyList()); private set
+
     private var keyDown = false
     private var keyBeginMs = 0L
     private val stuckKey = Runnable { handleStuckKey() }
+
+    private companion object { const val MAX_SIGNALS = 2000; const val MAX_CHAT = 500 }
 
     init {
         callsign = prefs.getString("callsign", null)?.takeIf { it.isNotBlank() } ?: anonCallsign()
@@ -79,6 +86,9 @@ class VailRepeater(context: Context) {
     // ---- Connection ----
 
     fun connect() {
+        signalEvents = emptyList()
+        chatMessages = emptyList()
+        liveOwnKeyStarts = emptyList()
         val isDecoder = channel.equals("Decoder", ignoreCase = true)
         client.connect(channel, isPrivate = !isDecoder, isDecoder = isDecoder)
     }
@@ -115,7 +125,12 @@ class VailRepeater(context: Context) {
         breakInEnabled = enabled; prefs.edit().putBoolean("breakIn", enabled).apply()
     }
 
-    fun sendChat(text: String) = client.sendChat(text)
+    fun sendChat(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        recordSignal(SignalEvent(callsign, System.currentTimeMillis(), SignalEvent.Kind.Chat(trimmed), SignalEvent.Origin.SENT))
+        client.sendChat(trimmed)
+    }
 
     // ---- Keying ----
 
@@ -126,17 +141,24 @@ class VailRepeater(context: Context) {
             keyBeginMs = nowMs
             isKeying = true
             sidetone?.setKeyDown(true)
+            if (breakInEnabled) liveOwnKeyStarts = liveOwnKeyStarts + nowMs
             startStuckKeyWatchdog()
         } else if (!isDown && keyDown) {
             keyDown = false
             isKeying = false
             sidetone?.setKeyDown(false)
             val duration = (nowMs - keyBeginMs).coerceAtLeast(0)
+            liveOwnKeyStarts = liveOwnKeyStarts - keyBeginMs
             if (breakInEnabled && duration in 1..65535) {
+                recordSignal(SignalEvent(callsign, keyBeginMs, SignalEvent.Kind.Tone(duration.toInt(), txTone), SignalEvent.Origin.SENT))
                 client.transmitTone(duration.toInt(), keyBeginMs)
             }
             main.removeCallbacks(stuckKey)
         }
+    }
+
+    private fun recordSignal(event: SignalEvent) {
+        signalEvents = (signalEvents + event).let { if (it.size > MAX_SIGNALS) it.drop(it.size - MAX_SIGNALS) else it }
     }
 
     private fun startStuckKeyWatchdog() {
@@ -148,6 +170,7 @@ class VailRepeater(context: Context) {
         keyDown = false
         isKeying = false
         sidetone?.setKeyDown(false)
+        liveOwnKeyStarts = emptyList()
         setBreakIn(false)
         notice = "Stuck key detected. Break-in disabled."
     }
@@ -163,12 +186,27 @@ class VailRepeater(context: Context) {
             }
             is VailEvent.Tone -> {
                 val note = event.txTone ?: 69
-                tonePlayer.scheduleTone(note, event.durationMs, event.atLocalMs + rxDelayMs)
+                val playAt = event.atLocalMs + rxDelayMs
+                tonePlayer.scheduleTone(note, event.durationMs, playAt)
+                val lane = when (event.fromCandidates.size) {
+                    0 -> "?"
+                    1 -> event.fromCandidates[0]
+                    else -> event.fromCandidates.sorted().joinToString("/")
+                }
+                recordSignal(SignalEvent(lane, playAt, SignalEvent.Kind.Tone(event.durationMs, event.txTone), SignalEvent.Origin.RECEIVED))
             }
             is VailEvent.Roster -> users = event.users
             is VailEvent.OwnEcho -> lagMs = event.lagMs
             is VailEvent.Notice -> notice = event.text
-            is VailEvent.Chat -> { /* chat UI is a follow-up; notices cover status */ }
+            is VailEvent.Chat -> {
+                // The server replays chat backlog on every join; drop exact dupes.
+                val dup = chatMessages.any { it.timestampMs == event.timestampMs && it.callsign == event.callsign && it.text == event.text }
+                if (!dup) {
+                    chatMessages = (chatMessages + ChatLine(event.text, event.callsign, event.timestampMs))
+                        .let { if (it.size > MAX_CHAT) it.drop(it.size - MAX_CHAT) else it }
+                    recordSignal(SignalEvent(event.callsign ?: "?", event.timestampMs, SignalEvent.Kind.Chat(event.text), SignalEvent.Origin.RECEIVED))
+                }
+            }
             is VailEvent.DecoderRoomChanged -> { /* informational */ }
         }
     }

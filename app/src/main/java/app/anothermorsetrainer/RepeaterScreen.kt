@@ -1,6 +1,7 @@
 package app.anothermorsetrainer
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -20,19 +21,27 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +49,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.vail.SignalEvent
 import app.anothermorsetrainer.vail.ConnectionState
 import app.anothermorsetrainer.vail.VailRepeater
 
@@ -196,6 +206,20 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     }
                 }
 
+                Spacer(Modifier.height(16.dp))
+                ActivityTimeline(repeater)
+
+                Spacer(Modifier.height(16.dp))
+                Column(modifier = Modifier.fillMaxWidth().brandCard().padding(16.dp)) {
+                    SliderRow("TX tone", repeater.txTone.toString(), repeater.txTone.toFloat(), 48f..96f) {
+                        repeater.updateTxTone(it.toInt())
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    SliderRow("RX delay", "${repeater.rxDelayMs} ms", repeater.rxDelayMs.toFloat(), 0f..5000f) {
+                        repeater.updateRxDelayMs(it.toInt())
+                    }
+                }
+
                 if (repeater.users.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))
                     Text("ON CHANNEL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
@@ -218,8 +242,109 @@ fun RepeaterScreen(onBack: () -> Unit) {
                     }
                 }
 
+                Spacer(Modifier.height(16.dp))
+                ChatPanel(repeater)
+
                 Spacer(Modifier.height(24.dp))
             }
         }
     }
+}
+
+/** A 12-second scrolling activity timeline: sent tones above the midline,
+ *  received below, chat as dots, and a live growing bar while keying. */
+@Composable
+private fun ActivityTimeline(repeater: VailRepeater) {
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { withFrameMillis { }; nowMs = System.currentTimeMillis() } }
+    val windowMs = 12_000.0
+    val chatColor = Color(0xFFFFA000)
+
+    Box(modifier = Modifier.fillMaxWidth().height(72.dp).brandCard().padding(10.dp)) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val midY = size.height / 2f
+            drawLine(Brand.hairline, Offset(0f, midY), Offset(w, midY), 1f)
+            val startMs = nowMs - windowMs
+            fun x(ms: Long): Float = ((ms - startMs) / windowMs * w).toFloat()
+            val barH = 12f
+            repeater.signalEvents.forEach { e ->
+                if (e.endLocalMs < startMs) return@forEach
+                val sent = e.origin == SignalEvent.Origin.SENT
+                val color = if (sent) Brand.teal else Brand.tealBright
+                when (val k = e.kind) {
+                    is SignalEvent.Kind.Tone -> {
+                        val x0 = x(e.startLocalMs).coerceAtLeast(0f)
+                        val x1 = x(e.startLocalMs + k.durationMs).coerceAtMost(w)
+                        if (x1 > x0) {
+                            val y = if (sent) midY - barH - 3 else midY + 3
+                            drawRoundRect(color, Offset(x0, y), Size(maxOf(2f, x1 - x0), barH), CornerRadius(2f))
+                        }
+                    }
+                    is SignalEvent.Kind.Chat -> {
+                        val cx = x(e.startLocalMs)
+                        if (cx in 0f..w) drawCircle(chatColor, 3f, Offset(cx, midY))
+                    }
+                }
+            }
+            repeater.liveOwnKeyStarts.forEach { begin ->
+                val x0 = x(begin).coerceAtLeast(0f)
+                val x1 = x(nowMs).coerceAtMost(w)
+                if (x1 > x0) drawRoundRect(Brand.tealBright, Offset(x0, midY - barH - 3), Size(maxOf(2f, x1 - x0), barH), CornerRadius(2f))
+            }
+        }
+        Text("ACTIVITY", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+    }
+}
+
+@Composable
+private fun ChatPanel(repeater: VailRepeater) {
+    var input by remember { mutableStateOf("") }
+    Text("CHAT", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Brand.textSecondary)
+    Spacer(Modifier.height(6.dp))
+    Column(modifier = Modifier.fillMaxWidth().brandCard().heightIn(min = 60.dp).padding(12.dp)) {
+        val recent = repeater.chatMessages.takeLast(40)
+        if (recent.isEmpty()) {
+            Text("No messages yet.", color = Brand.textSecondary, fontSize = 13.sp)
+        } else {
+            recent.forEach { line ->
+                Row {
+                    Text((line.callsign ?: "?") + ": ", color = Brand.teal, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                    Text(line.text, color = Brand.textPrimary, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it },
+            placeholder = { Text("Message") },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+        )
+        OutlinedButton(onClick = {
+            if (input.isNotBlank()) { repeater.sendChat(input); input = "" }
+        }) { Text("Send") }
+    }
+}
+
+@Composable
+private fun SliderRow(label: String, value: String, position: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Brand.textPrimary, fontWeight = FontWeight.Medium)
+        Text(value, color = Brand.teal, fontWeight = FontWeight.SemiBold)
+    }
+    Slider(
+        value = position,
+        onValueChange = onChange,
+        valueRange = range,
+        colors = SliderDefaults.colors(
+            thumbColor = Brand.teal,
+            activeTrackColor = Brand.teal,
+            inactiveTrackColor = Brand.navyRaised
+        ),
+        modifier = Modifier.height(24.dp)
+    )
 }
