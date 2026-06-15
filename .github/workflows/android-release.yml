@@ -1,8 +1,12 @@
 name: Android release (Play Store upload)
 
-# Fires when you push a version tag (e.g. `git tag v1.0.1 && git push origin v1.0.1`).
-# Builds the SIGNED app bundle (AAB) and uploads it to the Google Play **internal
-# testing** track. This automates the step iOS does by hand (Xcode -> TestFlight).
+# Fires when you push a version tag (e.g. `git tag v1.1.1 && git push origin v1.1.1`).
+# Builds the SIGNED app bundle (AAB) and uploads it to the Google Play closed
+# testing (beta) track. This automates the step iOS does by hand (Xcode -> TestFlight).
+#
+# The track id below ("alpha") is the default name of the first closed-testing
+# track; if you renamed it or made a custom track, set `track:` to that exact
+# track id (Play Console -> Testing -> Closed testing -> the track's name).
 #
 # It degrades gracefully: if the signing/Play secrets aren't configured yet, it
 # builds the bundle and uploads it as a workflow artifact instead of failing, so
@@ -73,7 +77,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: app.anothermorsetrainer
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          track: internal
+          track: alpha   # closed testing (beta); change if your track id differs
           status: completed
 
       - name: Save AAB as artifact (fallback / record)

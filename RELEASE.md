@@ -43,8 +43,9 @@ Two workflows are committed under `.github/workflows/`:
   an artifact, so changes made from the Claude phone app can be verified without a
   laptop (the Android counterpart of the iOS repo's `ios.yml`).
 - **`android-release.yml`** — on a pushed version tag (`v*`), builds the **signed
-  AAB and uploads it to the Play _internal testing_ track**. This automates the
-  step iOS still does by hand (Xcode → TestFlight). Cut a release with:
+  AAB and uploads it to the Play _closed testing_ (beta) track** (`track: alpha`
+  by default — change it if your closed track has a different id). This automates
+  the step iOS still does by hand (Xcode → TestFlight). Cut a release with:
 
   ```bash
   # bump versionCode/versionName in app/build.gradle.kts first, commit, then:
@@ -57,7 +58,8 @@ Two workflows are committed under `.github/workflows/`:
 ### One-time setup to enable the automated upload
 
 1. **The app must already exist in Play Console** with **one manual upload** on the
-   `internal` track (the API won't create the app or accept the very first upload).
+   target track (the API won't create the app or accept the very first upload). The
+   app is already in **closed testing**, so this is satisfied.
 2. **Create a Google Play service account** (Play Console → Setup → API access →
    create/link a Google Cloud service account → grant it **Release manager**), and
    download its **JSON key**.
