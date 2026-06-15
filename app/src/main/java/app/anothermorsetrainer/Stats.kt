@@ -53,6 +53,7 @@ object Stats {
     var totalSessions by mutableStateOf(0); private set
     var totalAttempts by mutableStateOf(0); private set
     var totalCorrect by mutableStateOf(0); private set
+    var totalPracticeSeconds by mutableStateOf(0); private set
     var bestTtrMs by mutableStateOf<Int?>(null); private set
     var recent by mutableStateOf<List<SessionSummary>>(emptyList()); private set
     /** Lifetime per-character recognition data, keyed by the single character. */
@@ -65,6 +66,7 @@ object Stats {
         totalSessions = prefs.getInt("sessions", 0)
         totalAttempts = prefs.getInt("attempts", 0)
         totalCorrect = prefs.getInt("correct", 0)
+        totalPracticeSeconds = prefs.getInt("practiceSecs", 0)
         bestTtrMs = prefs.getInt("bestTtr", -1).takeIf { it >= 0 }
 
         val sc = prefs.getInt("streakCurrent", 0)
@@ -90,7 +92,7 @@ object Stats {
     }
 
     /** Record a just-finished session and persist. No-op for empty sessions. */
-    fun record(mode: String, attempts: Int, correct: Int, bestTtrMs: Int?, today: LocalDate = LocalDate.now()) {
+    fun record(mode: String, attempts: Int, correct: Int, bestTtrMs: Int?, durationSeconds: Int = 0, today: LocalDate = LocalDate.now()) {
         if (attempts <= 0) return
         streak.record(today)
         refreshStreak()
@@ -98,6 +100,7 @@ object Stats {
         totalSessions += 1
         totalAttempts += attempts
         totalCorrect += correct
+        if (durationSeconds > 0) totalPracticeSeconds += durationSeconds
         if (bestTtrMs != null && (this.bestTtrMs == null || bestTtrMs < this.bestTtrMs!!)) {
             this.bestTtrMs = bestTtrMs
         }
@@ -115,6 +118,7 @@ object Stats {
             .putInt("sessions", totalSessions)
             .putInt("attempts", totalAttempts)
             .putInt("correct", totalCorrect)
+            .putInt("practiceSecs", totalPracticeSeconds)
             .putInt("bestTtr", bestTtrMs ?: -1)
             .putInt("streakCurrent", streak.current)
             .putInt("streakLongest", streak.longest)

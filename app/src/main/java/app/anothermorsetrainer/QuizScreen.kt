@@ -56,6 +56,10 @@ internal class Tally {
     var attempts = 0
     var correct = 0
     var bestMs: Int? = null
+    /** Wall-clock when this session began — Tally is remembered at screen entry. */
+    val startedAtMs: Long = System.currentTimeMillis()
+    /** Whole seconds of practice elapsed since the session began. */
+    fun elapsedSeconds(): Int = ((System.currentTimeMillis() - startedAtMs) / 1000L).toInt()
 }
 
 /**
@@ -122,7 +126,7 @@ fun QuizScreen(
     DisposableEffect(Unit) { onDispose { player.release(); recognizer.release() } }
 
     fun finish() {
-        Stats.record(mode = title, attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs)
+        Stats.record(mode = title, attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds())
         onBack()
     }
 
