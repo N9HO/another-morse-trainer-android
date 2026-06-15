@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,7 +102,16 @@ fun AppBackground(content: @Composable () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.systemBars)
-        ) { content() }
+        ) {
+            // Material3's default LocalContentColor is black, which only gets
+            // overridden inside a Surface. AMT paints its own navy background
+            // instead of a Surface, so any bare Text/Icon would inherit black
+            // (invisible on navy). Provide the light brand text color as the
+            // default so every screen reads correctly without setting it by hand.
+            CompositionLocalProvider(LocalContentColor provides Brand.textPrimary) {
+                content()
+            }
+        }
     }
 }
 
