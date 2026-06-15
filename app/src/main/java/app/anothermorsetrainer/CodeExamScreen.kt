@@ -224,6 +224,10 @@ private fun SolidCopyExam(
         }
         Spacer(Modifier.height(16.dp))
 
+        MorseNumberRow(
+            onKey = { if (!graded) typed += it },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        )
         OutlinedTextField(
             value = typed,
             onValueChange = { typed = it.uppercase() },

@@ -71,7 +71,7 @@ fun HeadCopyScreen(onBack: () -> Unit) {
     DisposableEffect(Unit) { onDispose { player.release() } }
 
     fun finish() {
-        Stats.record(mode = "Head Copy", attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs)
+        Stats.record(mode = "Head Copy", attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds())
         onBack()
     }
     BackHandler { finish() }

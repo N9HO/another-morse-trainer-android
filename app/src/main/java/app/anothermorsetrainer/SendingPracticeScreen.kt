@@ -144,7 +144,7 @@ fun SendingPracticeScreen(onBack: () -> Unit) {
     }
 
     fun finish() {
-        Stats.record(mode = "Sending", attempts = tally.attempts, correct = tally.correct, bestTtrMs = null)
+        Stats.record(mode = "Sending", attempts = tally.attempts, correct = tally.correct, bestTtrMs = null, durationSeconds = tally.elapsedSeconds())
         onBack()
     }
     BackHandler { finish() }

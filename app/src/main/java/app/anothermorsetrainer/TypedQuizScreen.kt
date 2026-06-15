@@ -103,7 +103,7 @@ fun TypedQuizScreen(
     DisposableEffect(Unit) { onDispose { player.release() } }
 
     fun finish() {
-        Stats.record(mode = title, attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs)
+        Stats.record(mode = title, attempts = tally.attempts, correct = tally.correct, bestTtrMs = tally.bestMs, durationSeconds = tally.elapsedSeconds())
         onBack()
     }
     BackHandler { finish() }
@@ -171,6 +171,11 @@ fun TypedQuizScreen(
             }
 
             Spacer(Modifier.height(28.dp))
+
+            MorseNumberRow(
+                onKey = { if (!revealed) input += it },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            )
 
             OutlinedTextField(
                 value = input,

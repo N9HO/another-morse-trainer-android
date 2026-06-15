@@ -2,6 +2,7 @@ package app.anothermorsetrainer
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,12 +12,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,129 +36,292 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.anothermorsetrainer.morsekit.MorseCode
 import app.anothermorsetrainer.morsekit.SessionRecord
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 private val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d")
+private val MASTERED = Color(0xFFEF9F27)
+private val GOOD = Color(0xFF5DCAA5)
 
 /**
- * Your progress at a glance: the daily practice streak, lifetime totals, your
- * best recognition time, and a list of recent sessions. Reads the persisted
- * [Stats] singleton (no work to do here but render).
+ * The Brag Sheet: your progress at a glance — daily streak with this week's
+ * practice strip, lifetime totals, personal bests, the per-character recognition
+ * chart, and recent sessions. A share button renders a card you can post. Reads
+ * the persisted [Stats] singleton.
  */
 @Composable
 fun StatsScreen(onBack: () -> Unit) {
     BackHandler { onBack() }
+    val context = LocalContext.current
     Column(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) { Text("‹ Back") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBack) { Text("‹ Back") }
+            Spacer(Modifier.weight(1f))
+            if (Stats.totalSessions > 0) {
+                IconButton(onClick = { ShareCard.share(context) }) {
+                    Icon(Icons.Filled.IosShare, contentDescription = "Share your brag sheet", tint = Brand.teal)
+                }
+            }
+        }
 
       CenteredContent {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 20.dp),
         ) {
-            Text("Your Progress", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(20.dp))
+            Text(
+                "Brag Sheet",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                textAlign = TextAlign.Center
+            )
 
             if (Stats.totalSessions == 0) {
                 Spacer(Modifier.height(40.dp))
                 Text(
                     "No sessions yet.\nFinish a practice round and your stats will show up here.",
                     textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 return@Column
             }
 
-            // Streak banner
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("🔥 ${Stats.currentStreak}", fontSize = 40.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        if (Stats.currentStreak == 1) "day streak" else "day streak",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        "Longest: ${Stats.longestStreak} days",
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
+            StreakHero()
+
+            SectionLabel("Lifetime")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricTile("Sessions", "${Stats.totalSessions}", Modifier.weight(1f))
+                MetricTile("Answered", "${Stats.totalAttempts}", Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricTile("Practice time", fmtDuration(Stats.totalPracticeSeconds), Modifier.weight(1f))
+                MetricTile("Accuracy", "${(Stats.overallAccuracy * 100).roundToInt()}%", Modifier.weight(1f), GOOD)
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            // Lifetime tiles
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatTile("Sessions", "${Stats.totalSessions}", Modifier.weight(1f))
-                StatTile("Drills", "${Stats.totalAttempts}", Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatTile("Accuracy", "${(Stats.overallAccuracy * 100).roundToInt()}%", Modifier.weight(1f))
-                StatTile("Best copy", Stats.bestTtrMs?.let { fmtMs(it) } ?: "—", Modifier.weight(1f))
-            }
+            SectionLabel("Personal bests")
+            PersonalBests()
 
             val charRows = Stats.charStats.entries
                 .mapNotNull { e -> e.value.medianMs?.let { CharBar(e.key, it, e.value.accuracy) } }
                 .sortedWith(compareBy(SessionRecord.characterOrder) { it.character })
             if (charRows.isNotEmpty()) {
-                Spacer(Modifier.height(24.dp))
-                Text(
-                    "Recognition speed",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                SectionLabel("Recognition speed")
                 Text(
                     "Median time to copy each character — shorter is better.",
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.fillMaxWidth()
+                    color = Brand.textSecondary,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                 )
-                Spacer(Modifier.height(12.dp))
                 val axisMax = SessionRecord.axisCeilingMS(charRows.maxOf { it.medianMs })
-                charRows.forEach { row ->
-                    RecognitionBar(row = row, axisMaxMs = axisMax)
-                    Spacer(Modifier.height(6.dp))
+                Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(14.dp)) {
+                    charRows.forEachIndexed { i, row ->
+                        RecognitionBar(row = row, axisMaxMs = axisMax)
+                        if (i < charRows.size - 1) Spacer(Modifier.height(8.dp))
+                    }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
-            Text(
-                "Recent sessions",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-
-            Stats.recent.forEach { s ->
-                SessionRow(
-                    mode = s.mode,
-                    date = LocalDate.ofEpochDay(s.epochDay).format(DATE_FMT),
-                    detail = "${s.correct}/${s.attempts} · ${(s.accuracy * 100).roundToInt()}%"
-                )
-                Spacer(Modifier.height(8.dp))
+            SectionLabel("Recent sessions")
+            Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp)) {
+                val recent = Stats.recent.take(6)
+                recent.forEachIndexed { i, s ->
+                    SessionRow(
+                        mode = s.mode,
+                        date = LocalDate.ofEpochDay(s.epochDay).format(DATE_FMT),
+                        attempts = s.attempts,
+                        accuracy = s.accuracy
+                    )
+                    if (i < recent.size - 1) HairlineDivider()
+                }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
         }
       }
     }
+}
+
+// MARK: - Streak hero
+
+@Composable
+private fun StreakHero() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Brand.cornerRadius))
+            .background(Brand.navyElevated)
+            .border(1.dp, Brand.teal.copy(alpha = 0.28f), RoundedCornerShape(Brand.cornerRadius))
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.LocalFireDepartment,
+                contentDescription = null,
+                tint = if (Stats.currentStreak > 0) MASTERED else Brand.textSecondary,
+                modifier = Modifier.size(26.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("${Stats.currentStreak}", fontSize = 38.sp, fontWeight = FontWeight.Bold, color = Brand.textPrimary)
+            Spacer(Modifier.width(8.dp))
+            Text("day streak", style = MaterialTheme.typography.bodyMedium, color = Brand.textSecondary)
+            Spacer(Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.End) {
+                Text("Longest", style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+                Text("${Stats.longestStreak}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Brand.textPrimary)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        WeekStrip()
+    }
+}
+
+@Composable
+private fun WeekStrip() {
+    val today = LocalDate.now()
+    val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    val practiced = Stats.recent.map { it.epochDay }.toHashSet()
+    val labels = listOf("M", "T", "W", "T", "F", "S", "S")
+    Row(modifier = Modifier.fillMaxWidth()) {
+        for (i in 0..6) {
+            val day = monday.plusDays(i.toLong())
+            val didPractice = practiced.contains(day.toEpochDay())
+            val isToday = day == today
+            val isFuture = day.isAfter(today)
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .then(
+                            if (didPractice) Modifier.background(Brand.teal)
+                            else Modifier.border(
+                                1.5.dp,
+                                if (isFuture) Brand.hairline else Brand.textSecondary.copy(alpha = 0.5f),
+                                CircleShape
+                            )
+                        )
+                        .then(if (isToday) Modifier.border(2.dp, Brand.tealBright, CircleShape) else Modifier),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (didPractice) {
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = Brand.navy, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Spacer(Modifier.height(5.dp))
+                Text(labels[i], style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+            }
+        }
+    }
+}
+
+// MARK: - Personal bests
+
+@Composable
+private fun PersonalBests() {
+    val context = LocalContext.current
+    val realSessions = Stats.recent.filter { it.attempts >= 10 }
+    val bestAcc = realSessions.maxOfOrNull { it.accuracy }
+    val biggest = Stats.recent.maxOfOrNull { it.attempts }
+    val mastered = ShareCard.masteredCount()
+    val total = MorseCode.kochOrder.size
+
+    Column(modifier = Modifier.fillMaxWidth().brandCard(14.dp).padding(horizontal = 14.dp, vertical = 4.dp)) {
+        BestRow(Icons.Filled.Bolt, "Fastest copy", Brand.teal,
+            Stats.bestTtrMs?.let { fmtMs(it) } ?: "—", Brand.teal)
+        HairlineDivider()
+        BestRow(Icons.Filled.TrackChanges, "Best session accuracy", Brand.textSecondary,
+            bestAcc?.let { "${(it * 100).roundToInt()}%" } ?: "—", if (bestAcc == null) Brand.textPrimary else GOOD)
+        HairlineDivider()
+        BestRow(Icons.Filled.BarChart, "Biggest session", Brand.textSecondary,
+            biggest?.let { "$it answered" } ?: "—", Brand.textPrimary)
+        HairlineDivider()
+        BestRow(Icons.Filled.WorkspacePremium, "Characters mastered", MASTERED, "$mastered / $total", MASTERED)
+        LinearProgressIndicator(
+            progress = { if (total == 0) 0f else mastered.toFloat() / total },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).clip(RoundedCornerShape(3.dp)),
+            color = MASTERED,
+            trackColor = Brand.navy
+        )
+    }
+}
+
+@Composable
+private fun BestRow(icon: ImageVector, label: String, iconColor: Color, value: String, valueColor: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = Brand.textPrimary)
+        Spacer(Modifier.weight(1f))
+        Text(value, fontWeight = FontWeight.Medium, color = valueColor)
+    }
+}
+
+// MARK: - Lifetime + recent
+
+@Composable
+private fun MetricTile(label: String, value: String, modifier: Modifier = Modifier, valueColor: Color = Brand.textPrimary) {
+    Column(modifier = modifier.clip(RoundedCornerShape(14.dp)).background(Brand.navyElevated).padding(14.dp)) {
+        Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = valueColor)
+        Spacer(Modifier.height(2.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
+    }
+}
+
+@Composable
+private fun SessionRow(mode: String, date: String, attempts: Int, accuracy: Double) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(mode, fontWeight = FontWeight.SemiBold, color = Brand.textPrimary)
+            Text(date, style = MaterialTheme.typography.labelSmall, color = Brand.textSecondary)
+        }
+        Text(
+            if (attempts == 0) "—" else "$attempts · ${(accuracy * 100).roundToInt()}%",
+            fontWeight = FontWeight.Medium,
+            color = if (accuracy >= 0.9) GOOD else MASTERED
+        )
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = Brand.textSecondary,
+        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 22.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun HairlineDivider() {
+    Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Brand.hairline))
 }
 
 /** One row of the recognition chart: a character, its median copy time, and accuracy. */
@@ -156,65 +331,31 @@ private data class CharBar(val character: String, val medianMs: Int, val accurac
 private fun RecognitionBar(row: CharBar, axisMaxMs: Int) {
     val fraction = (row.medianMs.toFloat() / axisMaxMs).coerceIn(0.04f, 1f)
     val barColor = when {
-        row.accuracy >= 0.9 -> MaterialTheme.colorScheme.primary
-        row.accuracy >= 0.7 -> MaterialTheme.colorScheme.secondary
-        else -> MaterialTheme.colorScheme.error
+        row.accuracy >= 0.9 -> Brand.teal
+        row.accuracy >= 0.7 -> Brand.tealBright
+        else -> MASTERED
     }
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            row.character,
-            modifier = Modifier.width(28.dp),
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp
-        )
+        Text(row.character, modifier = Modifier.width(28.dp), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Brand.textPrimary)
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(22.dp)
-                .clip(RoundedCornerShape(11.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+            modifier = Modifier.weight(1f).height(22.dp).clip(RoundedCornerShape(11.dp)).background(Brand.navy)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(fraction)
-                    .height(22.dp)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(barColor)
-            )
+            Box(modifier = Modifier.fillMaxWidth(fraction).height(22.dp).clip(RoundedCornerShape(11.dp)).background(barColor))
         }
-        Text(
-            fmtMs(row.medianMs),
-            modifier = Modifier.width(52.dp).padding(start = 8.dp),
-            style = MaterialTheme.typography.labelMedium
-        )
-    }
-}
-
-@Composable
-private fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier, elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-@Composable
-private fun SessionRow(mode: String, date: String, detail: String) {
-    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Column(modifier = Modifier.align(Alignment.CenterStart)) {
-                Text(mode, fontWeight = FontWeight.SemiBold)
-                Text(date, style = MaterialTheme.typography.labelSmall)
-            }
-            Text(detail, modifier = Modifier.align(Alignment.CenterEnd), fontWeight = FontWeight.Medium)
-        }
+        Text(fmtMs(row.medianMs), modifier = Modifier.width(52.dp).padding(start = 8.dp), style = MaterialTheme.typography.labelMedium, color = Brand.textSecondary)
     }
 }
 
 private fun fmtMs(ms: Int): String =
     if (ms >= 1000) "%.1fs".format(ms / 1000.0) else "${ms}ms"
+
+/** "4h 12m" / "12m" / "45s" — compact practice-time formatting, matching iOS. */
+private fun fmtDuration(seconds: Int): String {
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    return when {
+        h > 0 -> "${h}h ${m}m"
+        m > 0 -> "${m}m"
+        else -> "${seconds}s"
+    }
+}
