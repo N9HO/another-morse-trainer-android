@@ -75,6 +75,7 @@ private sealed interface Route {
     data object HeadCopy : Route
     data object TypeIt : Route
     data object Qrq : Route
+    data object RapidFire : Route
     data object Story : Route
     data object Sending : Route
     data object Repeater : Route
@@ -100,6 +101,7 @@ private fun AppRoot() {
             onPickHeadCopy = { route = Route.HeadCopy },
             onPickTypeIt = { route = Route.TypeIt },
             onPickQrq = { route = Route.Qrq },
+            onPickRapidFire = { route = Route.RapidFire },
             onPickStory = { route = Route.Story },
             onPickSending = { route = Route.Sending },
             onPickRepeater = { route = Route.Repeater },
@@ -122,6 +124,7 @@ private fun AppRoot() {
             makeSource = { PhraseQuiz("Type It", MorseData.wordAndCallSignItems) }
         )
         Route.Qrq -> QrqScreen(onBack = { route = Route.Home })
+        Route.RapidFire -> RapidFireScreen(onBack = { route = Route.Home })
         Route.Story -> StoryScreen(onBack = { route = Route.Home })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home })
         Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })

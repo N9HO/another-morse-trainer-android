@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Map
@@ -72,6 +73,7 @@ fun HomeScreen(
     onPickHeadCopy: () -> Unit,
     onPickTypeIt: () -> Unit,
     onPickQrq: () -> Unit,
+    onPickRapidFire: () -> Unit,
     onPickStory: () -> Unit,
     onPickSending: () -> Unit,
     onPickRepeater: () -> Unit,
@@ -106,6 +108,7 @@ fun HomeScreen(
     } + HomeItem("Head Copy", "Copy in your head", Icons.Filled.Psychology, onPickHeadCopy) +
         HomeItem("Type It", "Free-recall typing", Icons.Filled.Keyboard, onPickTypeIt) +
         HomeItem("QRQ Speed", "High-speed copy", Icons.Filled.Bolt, onPickQrq) +
+        HomeItem("Rapid Fire", "Back-to-back copy", Icons.Filled.FlashOn, onPickRapidFire) +
         HomeItem("Sending Practice", "Key it back", Icons.Filled.Vibration, onPickSending) +
         HomeItem("Repeater", "Live over the network", Icons.Filled.Wifi, onPickRepeater) +
         HomeItem("Short Stories", "Continuous copy", Icons.AutoMirrored.Filled.MenuBook, onPickStory) +
