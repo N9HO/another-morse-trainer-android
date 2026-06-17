@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Podcasts
@@ -63,6 +64,7 @@ private data class HomeItem(
 /** The app's landing menu: pick a training mode. Styled to match the iOS IntroView. */
 @Composable
 fun HomeScreen(
+    onPickJourney: () -> Unit,
     onPickQuiz: (QuizMode) -> Unit,
     onPickPileup: () -> Unit,
     onPickExam: () -> Unit,
@@ -93,7 +95,9 @@ fun HomeScreen(
         "Prosigns" to "Run-together signals",
         "Confusion Drill" to "Drill your mix-ups"
     )
-    val items = QUIZ_MODES.map { mode ->
+    val items = listOf(
+        HomeItem("Journey", "Leveled path", Icons.Filled.Map, onPickJourney)
+    ) + QUIZ_MODES.map { mode ->
         HomeItem(
             mode.title,
             modeTaglines[mode.title] ?: mode.subtitle,

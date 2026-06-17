@@ -238,6 +238,12 @@ object MorseData {
             MorseItem(id = it.name, playable = MorseItem.Playable.Pattern(it.pattern), answer = it.meaning, display = it.name)
         }
 
+    /** Call signs as drill items, where the answer is the call sign itself. */
+    val callSignItems: List<MorseItem>
+        get() = callSigns.map {
+            MorseItem(id = "call-$it", playable = MorseItem.Playable.Text(it), answer = it, display = it)
+        }
+
     /**
      * Words + call signs, where the answer is the text itself (used by the
      * advanced "Words & Call Signs" stage of the character ladder).

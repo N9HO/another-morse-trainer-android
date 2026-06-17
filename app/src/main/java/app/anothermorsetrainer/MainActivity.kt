@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Settings.init(this)
         Stats.init(this)
+        JourneyStore.init(this)
         setContent {
             AmtTheme {
                 AppBackground {
@@ -66,6 +67,7 @@ val QUIZ_MODES: List<QuizMode> = listOf(
 private sealed interface Route {
     data object Onboarding : Route
     data object Home : Route
+    data object Journey : Route
     data class Quiz(val mode: QuizMode) : Route
     data object Pileup : Route
     data object Exam : Route
@@ -88,7 +90,9 @@ private fun AppRoot() {
     }
     when (val r = route) {
         Route.Onboarding -> OnboardingScreen(onDone = { route = Route.Home })
+        Route.Journey -> JourneyScreen(onBack = { route = Route.Home })
         Route.Home -> HomeScreen(
+            onPickJourney = { route = Route.Journey },
             onPickQuiz = { route = Route.Quiz(it) },
             onPickPileup = { route = Route.Pileup },
             onPickExam = { route = Route.Exam },
