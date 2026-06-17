@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Abc
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Psychology
@@ -72,6 +73,7 @@ fun HomeScreen(
     onPickStory: () -> Unit,
     onPickSending: () -> Unit,
     onPickRepeater: () -> Unit,
+    onPickReference: () -> Unit,
     onPickSettings: () -> Unit,
     onPickStats: () -> Unit
 ) {
@@ -105,7 +107,8 @@ fun HomeScreen(
         HomeItem("Short Stories", "Continuous copy", Icons.AutoMirrored.Filled.MenuBook, onPickStory) +
         HomeItem("Pileup Runner", "Work a CW pileup", Icons.Filled.RecordVoiceOver, onPickPileup) +
         HomeItem("Code Exam", "ARRL/FCC code exam", Icons.Filled.WorkspacePremium, onPickExam) +
-        HomeItem("Listen & Learn", "Hands-free, eyes-free", Icons.Filled.Headphones, onPickListen)
+        HomeItem("Listen & Learn", "Hands-free, eyes-free", Icons.Filled.Headphones, onPickListen) +
+        HomeItem("Reference", "Look it up", Icons.AutoMirrored.Filled.ListAlt, onPickReference)
 
     CenteredContent {
         Column(

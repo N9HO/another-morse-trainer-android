@@ -76,6 +76,7 @@ private sealed interface Route {
     data object Story : Route
     data object Sending : Route
     data object Repeater : Route
+    data object Reference : Route
     data object Settings : Route
     data object Stats : Route
 }
@@ -98,6 +99,7 @@ private fun AppRoot() {
             onPickStory = { route = Route.Story },
             onPickSending = { route = Route.Sending },
             onPickRepeater = { route = Route.Repeater },
+            onPickReference = { route = Route.Reference },
             onPickSettings = { route = Route.Settings },
             onPickStats = { route = Route.Stats }
         )
@@ -119,6 +121,7 @@ private fun AppRoot() {
         Route.Story -> StoryScreen(onBack = { route = Route.Home })
         Route.Sending -> SendingPracticeScreen(onBack = { route = Route.Home })
         Route.Repeater -> RepeaterScreen(onBack = { route = Route.Home })
+        Route.Reference -> ReferenceScreen(onBack = { route = Route.Home })
         Route.Settings -> SettingsScreen(onBack = { route = Route.Home })
         Route.Stats -> StatsScreen(onBack = { route = Route.Home })
     }
