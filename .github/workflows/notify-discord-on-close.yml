@@ -1,7 +1,10 @@
-# Posts a message back to the originating Discord thread when an issue that the
-# triage bot filed is closed (e.g. a fix is merged). The bot stamps each issue
-# it opens with an HTML comment "<!-- discord-thread:<id> -->"; this reads that
-# id and posts to the thread via a Discord channel webhook.
+# Posts a message back to the originating Discord thread(s) when an issue that
+# the triage bot filed is closed (e.g. a fix is merged). The bot stamps each
+# issue it opens with an HTML comment "<!-- discord-thread:<id> -->" — and adds
+# the same marker in a comment when it attaches a duplicate report's thread to
+# an existing issue — so EVERY reporter's thread gets the ping, not just the
+# first. This reads the markers from the body and all comments and posts to
+# each thread via a Discord channel webhook.
 #
 # Requires a repository secret DISCORD_WEBHOOK_URL:
 #   In Discord: the channel the triage threads live in -> Edit Channel ->
@@ -17,13 +20,18 @@ on:
   issues:
     types: [closed]
 
+permissions:
+  issues: read
+
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Post resolution to the Discord thread
+      - name: Post resolution to the Discord thread(s)
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
@@ -37,11 +45,23 @@ jobs:
             exit 0
           fi
 
-          # Pull the Discord thread id the bot embedded in the issue body.
-          THREAD_ID="$(printf '%s' "$ISSUE_BODY" \
-            | grep -oE 'discord-thread:[0-9]+' | head -n1 | cut -d: -f2 || true)"
-          if [ -z "${THREAD_ID:-}" ]; then
-            echo "No discord-thread marker on this issue; nothing to notify."
+          # Markers from the issue body (the original reporter's thread)…
+          BODY_MARKERS="$(printf '%s' "$ISSUE_BODY" \
+            | grep -oE 'discord-thread:[0-9]+' || true)"
+
+          # …and from comments (threads the bot attached for duplicate reports).
+          # One page of 100 comments is plenty for this project's issues.
+          COMMENT_MARKERS="$(curl -sS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
+            | jq -r '.[].body // empty' \
+            | grep -oE 'discord-thread:[0-9]+' || true)"
+
+          THREAD_IDS="$(printf '%s\n%s\n' "$BODY_MARKERS" "$COMMENT_MARKERS" \
+            | cut -d: -f2 | grep -E '^[0-9]+$' | sort -u || true)"
+          if [ -z "${THREAD_IDS:-}" ]; then
+            echo "No discord-thread markers on this issue; nothing to notify."
             exit 0
           fi
 
@@ -51,7 +71,12 @@ jobs:
             MSG="✅ Good news — this is fixed! Issue #${ISSUE_NUMBER} (\"${ISSUE_TITLE}\") has been closed: ${ISSUE_URL}"
           fi
 
-          # jq builds correctly-escaped JSON; thread_id targets the specific thread.
-          jq -n --arg content "$MSG" '{content: $content}' \
-            | curl -sS -X POST -H "Content-Type: application/json" \
-                   --data @- "${WEBHOOK}?thread_id=${THREAD_ID}&wait=true"
+          # jq builds correctly-escaped JSON; thread_id targets each thread.
+          # One unreachable thread (e.g. deleted) shouldn't stop the others.
+          for TID in $THREAD_IDS; do
+            jq -n --arg content "$MSG" '{content: $content}' \
+              | curl -sS -X POST -H "Content-Type: application/json" \
+                     --data @- "${WEBHOOK}?thread_id=${TID}&wait=true" \
+              || echo "WARNING: failed to notify thread ${TID}"
+            echo
+          done
